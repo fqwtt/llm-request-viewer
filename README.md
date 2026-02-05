@@ -5,6 +5,8 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Browser-orange.svg)
 
+![界面预览](./showme.png)
+
 ## 功能特点
 
 ### 对话可视化
