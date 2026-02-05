@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Request Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #238636;
+            --accent-purple: #a371f7;
+            --accent-orange: #d29922;
+            --accent-red: #f85149;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 svg {
+            width: 20px;
+            height: 20px;
+            color: var(--accent-purple);
+        }
+
+        .model-badge {
+            background: var(--accent-green);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 24px;
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+        }
+
+        .stat-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .toggle-group {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
+
+        .toggle-btn-header {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn-header:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .toggle-btn-header.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 380px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .input-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .input-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            height: 180px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text-secondary);
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .btn {
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: #2ea043;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn-row .btn {
+            flex: 1;
+            margin-top: 0;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .tools-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .tools-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        /* Tools Grid */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+        }
+
+        .tool-chip {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            position: relative;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .tool-chip:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .tool-chip.active {
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .tool-chip-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-orange), #e3b341);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin: 0 auto 8px;
+            box-shadow: 0 2px 8px rgba(210, 153, 34, 0.3);
+        }
+
+        .tool-chip-name {
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: 600;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            line-height: 1.3;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .tool-detail-panel {
+            background: var(--bg-primary);
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            animation: slideDown 0.2s ease;
+            max-width: 100%;
+            overflow-wrap: break-word;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tool-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            min-width: 0;
+        }
+
+        .tool-detail-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent-orange), #e3b341);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .tool-detail-title {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .tool-detail-name {
+            color: var(--accent-blue);
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            line-height: 1.3;
+        }
+
+        .tool-detail-type {
+            color: var(--text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tool-detail-panel pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
+        }
+
+        .tool-detail-panel .json-block {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        .tool-detail-close {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .tool-detail-close:hover {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .tool-detail-desc {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .tool-detail-section {
+            margin-bottom: 12px;
+        }
+
+        .tool-detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .tool-detail-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .tool-params-table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .tool-params-table td {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .tool-params-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .tool-params-table td:first-child {
+            width: 35%;
+            color: var(--text-primary);
+            font-family: monospace;
+            padding-right: 8px;
+        }
+
+        .tool-params-table td:last-child {
+            width: 65%;
+        }
+
+        .tool-param-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-left: 4px;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .tool-param-tag.required {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+        }
+
+        .tool-param-tag.optional {
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+        }
+
+        .tool-param-type {
+            color: var(--accent-purple);
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        .tool-param-desc {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .tool-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .tool-empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+
+        .tool-empty-state p {
+            font-size: 13px;
+        }
+
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+        }
+
+        .messages-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .messages-list {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Message Bubbles */
+        .message-row {
+            display: flex;
+            width: 100%;
+        }
+
+        .message-row.left {
+            justify-content: flex-start;
+        }
+
+        .message-row.right {
+            justify-content: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 80%;
+            min-width: 60px;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .message-row.left .message-bubble {
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-row.right .message-bubble {
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Different message types */
+        .bubble-system {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .bubble-user {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .bubble-assistant {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .bubble-tool {
+            background: rgba(210, 153, 34, 0.15);
+            border: 1px solid rgba(210, 153, 34, 0.3);
+        }
+
+        .bubble-tool-result {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .bubble-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            border-bottom: 1px solid transparent;
+        }
+
+        .bubble-system .bubble-header,
+        .bubble-assistant .bubble-header {
+            color: var(--text-muted);
+            border-bottom-color: var(--border-color);
+        }
+
+        .bubble-tool .bubble-header {
+            color: var(--accent-orange);
+            border-bottom-color: rgba(210, 153, 34, 0.2);
+        }
+
+        .bubble-tool-result .bubble-header {
+            color: rgba(255,255,255,0.8);
+            border-bottom-color: rgba(255,255,255,0.2);
+        }
+
+        .bubble-avatar {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+
+        .bubble-system .bubble-avatar {
+            background: var(--text-muted);
+            color: var(--bg-primary);
+        }
+
+        .bubble-user .bubble-avatar {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .bubble-assistant .bubble-avatar {
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .bubble-tool .bubble-avatar {
+            background: var(--accent-orange);
+            color: var(--bg-primary);
+        }
+
+        .bubble-tool-result .bubble-avatar {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .bubble-content {
+            padding: 12px 14px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .bubble-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+        }
+
+        /* Tool calls in assistant message */
+        .tool-call-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .tool-call-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-orange);
+            margin-bottom: 8px;
+        }
+
+        .tool-call-args {
+            background: var(--bg-primary);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .tool-call-args pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        /* Reasoning section */
+        .reasoning-section {
+            background: rgba(163, 113, 247, 0.1);
+            border: 1px solid rgba(163, 113, 247, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .reasoning-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-purple);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .reasoning-header svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .reasoning-content {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-style: italic;
+            line-height: 1.5;
+        }
+
+        /* Collapsible styles */
+        .collapsible-wrapper {
+            position: relative;
+        }
+
+        .collapsible-content {
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 120px;
+            mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+        }
+
+        .collapsible-content.expanded {
+            max-height: none;
+            mask-image: none;
+            -webkit-mask-image: none;
+        }
+
+        .toggle-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 6px;
+            margin-top: 8px;
+            background: transparent;
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(88, 166, 255, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .toggle-btn svg {
+            width: 12px;
+            height: 12px;
+            transition: transform 0.2s;
+        }
+
+        .toggle-btn.expanded svg {
+            transform: rotate(180deg);
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        /* Welcome message */
+        .welcome-message {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 600px;
+        }
+
+        .welcome-message h4 {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .welcome-message ul {
+            list-style: none;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .welcome-message li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .welcome-message li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--accent-blue);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: absolute;
+                z-index: 100;
+                height: 100%;
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .message-bubble {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            LLM Request Viewer
+        </h1>
+        <span class="model-badge" id="modelBadge">未加载</span>
+    </div>
+
+    <div class="stats-bar" id="statsBar" style="display: none;">
+        <div class="stat-item">
+            <span class="stat-label">Messages:</span>
+            <span class="stat-value" id="statMessages">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Tools:</span>
+            <span class="stat-value" id="statTools">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Est. Tokens:</span>
+            <span class="stat-value" id="statTokens">~0</span>
+        </div>
+        <div class="toggle-group">
+            <button class="toggle-btn-header active" id="toggleReasoning" onclick="toggleReasoning()">显示思考过程</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="input-section">
+                <h3>输入 JSON 请求</h3>
+                <textarea id="jsonInput" placeholder='粘贴抓包获取的 JSON 请求体...'></textarea>
+                <div class="btn-row">
+                    <button class="btn" onclick="parseRequest()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        解析请求
+                    </button>
+                    <div class="file-input-wrapper">
+                        <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            加载
+                        </button>
+                        <input type="file" id="fileInput" accept=".json,.txt" onchange="loadFile(event)">
+                    </div>
+                </div>
+            </div>
+
+            <div class="tools-section" id="toolsSection">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h3 style="margin: 0;">可用工具</h3>
+                    <span id="toolCount" style="font-size: 11px; color: var(--text-muted);">0 tools</span>
+                </div>
+                <div id="toolsList"></div>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages-wrapper" id="messagesWrapper">
+                <div class="messages-list" id="messagesList">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"/>
+                            <path d="M17 8L12 3M12 3L7 8M12 3V15"/>
+                        </svg>
+                        <h3>开始解析 LLM 请求</h3>
+                        <p>在左侧粘贴 JSON 请求数据，查看对话流程</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let showReasoning = true;
+
+        function toggleReasoning() {
+            showReasoning = !showReasoning;
+            const btn = document.getElementById('toggleReasoning');
+            btn.classList.toggle('active', showReasoning);
+            btn.textContent = showReasoning ? '显示思考过程' : '隐藏思考过程';
+
+            // 重新渲染以应用更改
+            const input = document.getElementById('jsonInput').value;
+            if (input.trim()) {
+                parseRequest();
+            }
+        }
+
+        function estimateTokens(text) {
+            if (!text) return 0;
+            return Math.ceil(text.length / 4);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function shouldCollapse(content) {
+            if (!content) return false;
+            const text = typeof content === 'string' ? content : JSON.stringify(content);
+            const lines = text.split('\n').length;
+            return text.length > 300 || lines > 5;
+        }
+
+        function toggleCollapse(btn, wrapperId) {
+            const wrapper = document.getElementById(wrapperId);
+            const content = wrapper.querySelector('.collapsible-content');
+            const isCollapsed = content.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                content.classList.remove('collapsed');
+                content.classList.add('expanded');
+                btn.classList.add('expanded');
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 15l-6-6-6 6"/>
+                    </svg>
+                    收起
+                `;
+            } else {
+                content.classList.remove('expanded');
+                content.classList.add('collapsed');
+                btn.classList.remove('expanded');
+                btn.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    展开
+                `;
+            }
+        }
+
+        function createCollapsibleContent(content, contentId) {
+            const needCollapse = shouldCollapse(content);
+            const escapedContent = escapeHtml(content);
+
+            if (!needCollapse) {
+                return `<pre>${escapedContent}</pre>`;
+            }
+
+            return `
+                <div class="collapsible-wrapper" id="${contentId}">
+                    <div class="collapsible-content collapsed">
+                        <pre>${escapedContent}</pre>
+                    </div>
+                    <button class="toggle-btn" onclick="toggleCollapse(this, '${contentId}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                        展开 (${escapedContent.length} 字符)
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderReasoning(reasoning, id) {
+            if (!reasoning || !showReasoning) return '';
+
+            const reasoningId = `reasoning-${id}`;
+            const needCollapse = shouldCollapse(reasoning);
+            const escapedReasoning = escapeHtml(reasoning);
+
+            let contentHtml;
+            if (needCollapse) {
+                contentHtml = `
+                    <div class="collapsible-wrapper" id="${reasoningId}">
+                        <div class="collapsible-content collapsed">
+                            <pre>${escapedReasoning}</pre>
+                        </div>
+                        <button class="toggle-btn" onclick="toggleCollapse(this, '${reasoningId}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M6 9l6 6 6-6"/>
+                            </svg>
+                            展开
+                        </button>
+                    </div>
+                `;
+            } else {
+                contentHtml = `<pre>${escapedReasoning}</pre>`;
+            }
+
+            return `
+                <div class="reasoning-section">
+                    <div class="reasoning-header">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        Thinking Process
+                    </div>
+                    <div class="reasoning-content">${contentHtml}</div>
+                </div>
+            `;
+        }
+
+        function renderToolCalls(toolCalls, msgId) {
+            if (!toolCalls || !toolCalls.length) return '';
+
+            return toolCalls.map((call, idx) => {
+                const args = typeof call.function?.arguments === 'string'
+                    ? JSON.stringify(JSON.parse(call.function.arguments), null, 2)
+                    : JSON.stringify(call.arguments || {}, null, 2);
+
+                const callId = `toolcall-${msgId}-${idx}`;
+                const needsCollapse = shouldCollapse(args);
+
+                let argsHtml;
+                if (needsCollapse) {
+                    argsHtml = `
+                        <div class="collapsible-wrapper" id="${callId}">
+                            <div class="collapsible-content collapsed">
+                                <pre>${escapeHtml(args)}</pre>
+                            </div>
+                            <button class="toggle-btn" onclick="toggleCollapse(this, '${callId}')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9l6 6 6-6"/>
+                                </svg>
+                                展开参数
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    argsHtml = `<pre>${escapeHtml(args)}</pre>`;
+                }
+
+                return `
+                    <div class="tool-call-item">
+                        <div class="tool-call-header">
+                            <span>🔧</span>
+                            <span>${escapeHtml(call.function?.name || call.name || 'unknown')}</span>
+                        </div>
+                        <div class="tool-call-args">${argsHtml}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        let currentTools = [];
+        let activeToolIndex = -1;
+
+        function getToolIcon(name) {
+            // 根据工具名返回合适的 emoji
+            const iconMap = {
+                'bash': '⚡',
+                'shell': '⚡',
+                'exec': '⚡',
+                'read_file': '📄',
+                'write_file': '✏️',
+                'edit_file': '🔧',
+                'search': '🔍',
+                'grep': '🔍',
+                'glob': '📁',
+                'web_search': '🌐',
+                'web_fetch': '🌐',
+                'http': '🌐',
+                'api': '🔌',
+                'db': '🗄️',
+                'database': '🗄️',
+                'calc': '🧮',
+                'math': '🧮',
+                'image': '🖼️',
+                'vision': '👁️',
+                'audio': '🔊',
+                'tts': '🔊',
+                'stt': '🎤',
+                'code': '💻',
+                'python': '🐍',
+                'javascript': '📜',
+                'typescript': '📘',
+                'git': '🌿',
+                'github': '🐙',
+                'docker': '🐳',
+                'k8s': '☸️',
+                'aws': '☁️',
+                'cloud': '☁️',
+                'email': '📧',
+                'slack': '💬',
+                'notify': '🔔',
+                'calendar': '📅',
+                'timer': '⏰',
+                'schedule': '⏰',
+                'weather': '🌤️',
+                'translate': '🌐',
+                'summarize': '📝',
+                'analyze': '📊'
+            };
+
+            for (const [key, icon] of Object.entries(iconMap)) {
+                if (name.toLowerCase().includes(key)) return icon;
+            }
+            return '🔧';
+        }
+
+        function renderTools(tools) {
+            currentTools = tools || [];
+            const container = document.getElementById('toolsList');
+            const countEl = document.getElementById('toolCount');
+
+            // 更新工具数量
+            if (countEl) {
+                countEl.textContent = `${currentTools.length} tool${currentTools.length !== 1 ? 's' : ''}`;
+            }
+
+            if (!currentTools.length) {
+                container.innerHTML = `
+                    <div class="tool-empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <path d="M9 9h6v6H9z"/>
+                            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                        </svg>
+                        <p>无可用工具</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const toolsHtml = currentTools.map((tool, index) => {
+                const func = tool.function || tool;
+                const name = func.name || 'unknown';
+                const icon = getToolIcon(name);
+
+                return `
+                    <div class="tool-chip ${activeToolIndex === index ? 'active' : ''}"
+                         onclick="selectTool(${index})"
+                         title="${escapeHtml(name)}">
+                        <div class="tool-chip-icon">${icon}</div>
+                        <div class="tool-chip-name">${escapeHtml(name.length > 15 ? name.substring(0, 12) + '...' : name)}</div>
+                    </div>
+                `;
+            }).join('');
+
+            let detailHtml = '';
+            if (activeToolIndex >= 0 && activeToolIndex < currentTools.length) {
+                detailHtml = renderToolDetail(currentTools[activeToolIndex], activeToolIndex);
+            }
+
+            container.innerHTML = `
+                <div class="tools-grid">${toolsHtml}</div>
+                ${detailHtml}
+            `;
+        }
+
+        function renderToolDetail(tool, index) {
+            const func = tool.function || tool;
+            const name = func.name || 'unknown';
+            const description = func.description || '无描述';
+            const icon = getToolIcon(name);
+            const params = func.parameters || {};
+            const required = new Set(params.required || []);
+            const properties = params.properties || {};
+
+            let paramsHtml = '';
+            if (Object.keys(properties).length > 0) {
+                const rows = Object.entries(properties).map(([paramName, prop]) => {
+                    const isRequired = required.has(paramName);
+                    return `
+                        <tr>
+                            <td>
+                                ${escapeHtml(paramName)}
+                                <span class="tool-param-tag ${isRequired ? 'required' : 'optional'}">
+                                    ${isRequired ? '必填' : '可选'}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="tool-param-type">${prop.type}</div>
+                                <div class="tool-param-desc">${escapeHtml(prop.description || '无描述')}</div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                paramsHtml = `
+                    <div class="tool-detail-section">
+                        <div class="tool-detail-section-title">参数</div>
+                        <table class="tool-params-table">${rows}</table>
+                    </div>
+                `;
+            }
+
+            // 构建 JSON Schema 示例
+            let schemaHtml = '';
+            if (params && Object.keys(params).length > 0) {
+                const schemaExample = {
+                    name: name,
+                    arguments: Object.entries(properties).reduce((acc, [key, prop]) => {
+                        acc[key] = `<${prop.type}>`;
+                        return acc;
+                    }, {})
+                };
+                schemaHtml = `
+                    <div class="tool-detail-section">
+                        <div class="tool-detail-section-title">调用示例</div>
+                        <div class="json-block" style="font-family: monospace; font-size: 11px;">
+                            <pre>${escapeHtml(JSON.stringify(schemaExample, null, 2))}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 描述部分 - 如果太长则折叠
+            const descId = `tool-desc-${index}`;
+            let descHtml;
+            if (shouldCollapse(description)) {
+                descHtml = `
+                    <div class="tool-detail-section">
+                        <div class="tool-detail-section-title">描述</div>
+                        <div class="collapsible-wrapper" id="${descId}">
+                            <div class="collapsible-content collapsed" style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+                                <pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(description)}</pre>
+                            </div>
+                            <button class="toggle-btn" onclick="toggleCollapse(this, '${descId}')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9l6 6 6-6"/>
+                                </svg>
+                                展开描述
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                descHtml = `
+                    <div class="tool-detail-section">
+                        <div class="tool-detail-section-title">描述</div>
+                        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+                            <pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(description)}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="tool-detail-panel" id="toolDetailPanel">
+                    <div class="tool-detail-header">
+                        <div class="tool-detail-icon">${icon}</div>
+                        <div class="tool-detail-title">
+                            <div class="tool-detail-name">${escapeHtml(name)}</div>
+                            <div class="tool-detail-type">Function Tool</div>
+                        </div>
+                        <button class="tool-detail-close" onclick="closeToolDetail(${index})" title="关闭">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    ${descHtml}
+                    ${paramsHtml}
+                    ${schemaHtml}
+                </div>
+            `;
+        }
+
+        function selectTool(index) {
+            if (activeToolIndex === index) {
+                activeToolIndex = -1; // 再次点击关闭
+                renderTools(currentTools);
+            } else {
+                activeToolIndex = index;
+                renderTools(currentTools);
+
+                // 滚动到详情面板
+                setTimeout(() => {
+                    const detailPanel = document.getElementById('toolDetailPanel');
+                    if (detailPanel) {
+                        detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }, 50);
+            }
+        }
+
+        function closeToolDetail(index) {
+            activeToolIndex = -1;
+            renderTools(currentTools);
+        }
+
+        function renderMessage(msg, index) {
+            const role = msg.role || 'unknown';
+            const content = msg.content || '';
+            const reasoning = msg.reasoning_content;
+            const contentId = `msg-${index}`;
+
+            // 确定消息位置和样式
+            const isRight = role === 'user' || role === 'tool';
+            const bubbleClass = {
+                'system': 'bubble-system',
+                'user': 'bubble-user',
+                'assistant': 'bubble-assistant',
+                'tool': msg.tool_call_id ? 'bubble-tool-result' : 'bubble-tool'
+            }[role] || 'bubble-system';
+
+            const avatar = {
+                'system': 'S',
+                'user': 'U',
+                'assistant': 'AI',
+                'tool': 'T'
+            }[role] || '?';
+
+            const label = {
+                'system': 'System',
+                'user': 'User',
+                'assistant': 'Assistant',
+                'tool': msg.tool_call_id ? 'Tool Result' : 'Tool'
+            }[role] || role;
+
+            // 构建内容HTML
+            let contentHtml = '';
+
+            // 思考过程（仅限 assistant）
+            if (role === 'assistant' && reasoning) {
+                contentHtml += renderReasoning(reasoning, index);
+            }
+
+            // 主要内容
+            if (content) {
+                if (shouldCollapse(content)) {
+                    contentHtml += createCollapsibleContent(content, contentId);
+                } else {
+                    contentHtml += `<pre>${escapeHtml(content)}</pre>`;
+                }
+            }
+
+            // 工具调用 (在 assistant 消息中)
+            if (msg.tool_calls) {
+                contentHtml += renderToolCalls(msg.tool_calls, index);
+            }
+
+            // 工具响应标识
+            if (msg.tool_call_id) {
+                contentHtml = `<div style="font-size: 11px; opacity: 0.7; margin-bottom: 8px;">响应: ${escapeHtml(msg.tool_call_id.substring(0, 30))}...</div>` + contentHtml;
+            }
+
+            const tokens = estimateTokens(content);
+
+            return `
+                <div class="message-row ${isRight ? 'right' : 'left'}">
+                    <div class="message-bubble ${bubbleClass}">
+                        <div class="bubble-header">
+                            <div class="bubble-avatar">${avatar}</div>
+                            <span>${label}</span>
+                            <span style="margin-left: auto; font-size: 10px; opacity: 0.6;">~${tokens} tokens</span>
+                        </div>
+                        <div class="bubble-content">${contentHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function parseRequest() {
+            const input = document.getElementById('jsonInput').value;
+            if (!input.trim()) {
+                alert('请输入 JSON 数据');
+                return;
+            }
+
+            let data;
+            try {
+                data = JSON.parse(input);
+            } catch (e) {
+                alert('JSON 解析失败: ' + e.message);
+                return;
+            }
+
+            // 更新模型信息
+            document.getElementById('modelBadge').textContent = data.model || '未知模型';
+
+            // 重置工具选择状态并渲染工具
+            activeToolIndex = -1;
+            renderTools(data.tools);
+
+            // 统计信息
+            const messages = data.messages || [];
+            const tools = data.tools || [];
+            let totalTokens = 0;
+
+            messages.forEach(msg => {
+                const content = msg.content || '';
+                const reasoning = msg.reasoning_content || '';
+                totalTokens += estimateTokens(content) + estimateTokens(reasoning);
+            });
+
+            document.getElementById('statMessages').textContent = messages.length;
+            document.getElementById('statTools').textContent = tools.length;
+            document.getElementById('statTokens').textContent = '~' + totalTokens;
+            document.getElementById('statsBar').style.display = 'flex';
+
+            // 渲染消息
+            const container = document.getElementById('messagesList');
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>无消息数据</h3>
+                        <p>该请求中没有消息内容</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = messages.map((msg, index) => renderMessage(msg, index)).join('');
+
+            // 滚动到底部
+            const wrapper = document.getElementById('messagesWrapper');
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
+        function loadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('jsonInput').value = e.target.result;
+                parseRequest();
+            };
+            reader.readAsText(file);
+        }
+
+        // 支持 Ctrl/Cmd + Enter 快速解析
+        document.getElementById('jsonInput').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                parseRequest();
+            }
+        });
+
+        // 示例数据
+        const sampleData = {
+            "model": "claude-3-5-sonnet-20241022",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are Claude, an AI assistant created by Anthropic. You help users with various tasks including coding, analysis, and problem-solving."
+                },
+                {
+                    "role": "user",
+                    "content": "帮我分析一下这个目录下有哪些文件？"
+                },
+                {
+                    "role": "assistant",
+                    "reasoning_content": "用户想要查看目录下的文件。我需要使用 bash 工具来列出文件。让我思考一下用什么命令最合适：\n\n1. 使用 `ls -la` 可以显示所有文件包括隐藏文件\n2. 使用 `find` 可以更灵活地搜索\n3. 考虑到用户可能想看代码文件，我先用 ls 看一下整体结构",
+                    "content": "我来帮你查看目录下的文件结构。",
+                    "tool_calls": [
+                        {
+                            "id": "toolu_01ABC123",
+                            "type": "function",
+                            "function": {
+                                "name": "bash",
+                                "arguments": "{\"command\": \"ls -la /Users/aaron./tmp/llm-reader1\", \"description\": \"列出目录下所有文件\"}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "toolu_01ABC123",
+                    "content": "total 16\ndrwxr-xr-x  4 aaron  staff   128 Feb  5 14:30 .\ndrwxr-xr-x  3 aaron  staff    96 Feb  5 14:00 ..\n-rw-r--r--  1 aaron  staff  8234 Feb  5 14:30 llm-request-viewer.html\n-rw-r--r--  1 aaron  staff   256 Feb  5 14:15 sample.json"
+                },
+                {
+                    "role": "assistant",
+                    "reasoning_content": "工具返回了结果，显示有两个主要文件：\n1. llm-request-viewer.html - 看起来是这个LLM请求查看工具的主文件\n2. sample.json - 示例数据文件\n\n我应该简洁地向用户总结这些文件。",
+                    "content": "该目录下有以下文件：\n\n1. **llm-request-viewer.html** (8.2KB) - LLM请求查看工具的主页面\n2. **sample.json** (256B) - 示例数据文件\n\n看起来这是一个用于可视化和解析AI Agent请求数据的工具项目。"
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "bash",
+                        "description": "执行bash/shell命令，用于系统操作、文件管理、程序运行等",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string", "description": "要执行的shell命令"},
+                                "timeout": {"type": "number", "description": "超时时间(毫秒)"},
+                                "workdir": {"type": "string", "description": "工作目录"}
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "description": "读取指定文件的内容，支持偏移量和行数限制",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "文件的绝对路径"},
+                                "offset": {"type": "number", "description": "开始读取的行号(0索引)"},
+                                "limit": {"type": "number", "description": "最大读取行数"}
+                            },
+                            "required": ["file_path"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "description": "将内容写入文件，会覆盖原有内容",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "目标文件路径"},
+                                "content": {"type": "string", "description": "要写入的文件内容"}
+                            },
+                            "required": ["file_path", "content"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "edit_file",
+                        "description": "对文件进行精确编辑，替换指定内容",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "要编辑的文件路径"},
+                                "old_string": {"type": "string", "description": "要被替换的旧文本"},
+                                "new_string": {"type": "string", "description": "用于替换的新文本"}
+                            },
+                            "required": ["file_path", "old_string", "new_string"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "web_search",
+                        "description": "使用搜索引擎查询信息，获取最新网络数据",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "搜索查询词"},
+                                "num_results": {"type": "number", "description": "返回结果数量"}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "web_fetch",
+                        "description": "获取指定URL的网页内容",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "url": {"type": "string", "description": "要获取的URL"},
+                                "timeout": {"type": "number", "description": "超时时间(秒)"}
+                            },
+                            "required": ["url"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "glob_search",
+                        "description": "使用glob模式搜索文件，如 **/*.js",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {"type": "string", "description": "glob匹配模式"},
+                                "path": {"type": "string", "description": "搜索起始目录"}
+                            },
+                            "required": ["pattern"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "code_analyze",
+                        "description": "分析代码质量、结构和潜在问题",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string", "description": "要分析的代码"},
+                                "language": {"type": "string", "description": "编程语言"}
+                            },
+                            "required": ["code"]
+                        }
+                    }
+                }
+            ]
+        };
+
+        document.getElementById('jsonInput').value = JSON.stringify(sampleData, null, 2);
+    </script>
+</body>
+</html>
